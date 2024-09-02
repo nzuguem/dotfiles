@@ -1,0 +1,44 @@
+on:
+  workflow_dispatch:
+  # "*" is a special character in YAML so you have to quote this string
+  # The times in the schedule must be in UTC
+  schedule:
+    - cron: '45-59/5 6 * * 1-5' # UTC + 2 -> Europe/Paris : 45-59/5 8 * * 1-5
+    - cron: '0-55/5 7 * * 1-5' # UTC + 2 -> Europe/Paris : 0-55/5 9 * * 1-5
+    - cron: '0 8 * * 1-5' # UTC + 2 -> Europe/Paris : 0 10 * * 1-5
+
+jobs:
+  check-appointment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run a one-line script
+        run: scripts/rdv-notif-35.sh > email-content.html
+      - name: Upload email-content.html
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-notification
+          path: email-content.html
+
+  notify:
+    needs: check-appointment
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download email-content.html
+        uses: actions/download-artifact@v4
+        with:
+          name: email-notification
+      - name: Send email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ vars.KN_MAIL_USER }}
+          password: ${{ secrets.KN_MAIL_PASSWORD }}
+          subject: 🔔 Disponibilité des créneaux horaires sur le site de la préfecture 35
+          to: ${{ vars.RDV_NOTIF_35_TO }}
+          from: ${{ vars.RDV_NOTIF_35_FROM }}
+          html_body: file://email-content.html
+          priority: high
